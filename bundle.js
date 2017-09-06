@@ -451,7 +451,7 @@ function isServiceWorkerRegistered() {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
     Promise.resolve().then(push.getPushPermissionStatus).then(function (permission) {
-      if (permission === 'granted') {
+      if (permission === 'granted' || permission === 'prompt') {
         Promise.resolve().then(isServiceWorkerRegistered).then(function (registerd) {
           if (registerd == false) {
             registerServiceWorker();
