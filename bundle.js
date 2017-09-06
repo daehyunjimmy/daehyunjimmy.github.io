@@ -439,7 +439,6 @@ function registerServiceWorker() {
 function isServiceWorkerRegistered() {
   return new Promise(function (resolve, reject) {
     navigator.serviceWorker.getRegistration().then(function (registration) {
-      console.log('isServiceWorkerRegistered' + registration);
       if (registration === undefined) {
         resolve(false);
       } else {
@@ -454,7 +453,6 @@ if ('serviceWorker' in navigator) {
     Promise.resolve().then(push.getPushPermissionStatus).then(function (permission) {
       if (permission === 'granted') {
         Promise.resolve().then(isServiceWorkerRegistered).then(function (registerd) {
-          console.log(' registerd  = ' + registerd);
           if (registerd == false) {
             registerServiceWorker();
           }
