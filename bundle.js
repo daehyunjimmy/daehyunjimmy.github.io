@@ -68,13 +68,17 @@
 /************************************************************************/
 /******/ ([
 /* 0 */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ (function(module, exports) {
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }(); // Copyright (c) 2017 The Absolute Authors.
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+// Copyright (c) 2017 The Absolute Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,14 +91,6 @@ var _createClass = function () { function defineProperties(target, props) { for 
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-var _authorization_manager = __webpack_require__(7);
-
-var _authorization_manager2 = _interopRequireDefault(_authorization_manager);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 /**
  * push class
@@ -111,30 +107,44 @@ var Push = function () {
   }
 
   /**
-   * send push information to server
+   *  get push permission status
    */
 
 
   _createClass(Push, [{
-    key: 'registerSubscription',
-    value: function registerSubscription(subscription) {
+    key: 'getPushPermissionStatus',
+    value: function getPushPermissionStatus() {
+      // query push permissions
+      return new Promise(function (resolve, reject) {
+        navigator.permissions.query({ name: 'push', userVisibleOnly: true }).then(function (permissionStatus) {
+          console.log('push permission state is ', permissionStatus.state);
+          resolve(permissionStatus.state);
+        });
+      });
+    }
+
+    /**
+     * send push information to server
+     */
+
+  }, {
+    key: 'registerPushSubscription',
+    value: function registerPushSubscription(subscription) {
       this._subscription = subscription;
       var queryUrl = '/api/push/token/';
       var jsonSubscription = subscription.toJSON();
 
-      // Check userId
-      var userId = _authorization_manager2.default.getBrowserFingerprint();
-      console.log(userId);
-      prompt(userId);
       var pushHeaders = new Headers({
         'Content-Type': 'application/json'
       });
+
       var pushData = JSON.stringify({
         // FIXME(daehyun): this userId should be replaced, now we use endpoint
         userId: jsonSubscription.endpoint,
         endpoint: jsonSubscription.endpoint,
         keys: jsonSubscription.keys
       });
+
       var pushRequest = new Request(queryUrl, {
         method: 'POST',
         headers: pushHeaders,
@@ -145,21 +155,10 @@ var Push = function () {
         if (response.status !== 200) {
           console.log('Failed to fetch request. Status Code: ' + response.status);
         }
-        console.log('push Request Success!');
       }).catch(function (error) {
         console.log('Request failed: ' + error);
       });
       console.log('subscription registered :\n      ' + JSON.stringify(this._subscription));
-    }
-
-    /**
-     * get push subscription with uuid from server
-     */
-
-  }, {
-    key: 'getSubscription',
-    value: function getSubscription() {
-      return this._subscription;
     }
   }]);
 
@@ -388,7 +387,7 @@ var _push_manager = __webpack_require__(0);
 
 var _push_manager2 = _interopRequireDefault(_push_manager);
 
-var _push_key = __webpack_require__(8);
+var _push_key = __webpack_require__(7);
 
 var _push_key2 = _interopRequireDefault(_push_key);
 
@@ -409,26 +408,61 @@ function urlBase64UrlToUint8Array(base64UrlData) {
   return buffer;
 }
 
+/**
+ *  register service worker
+ */
+function registerServiceWorker() {
+  navigator.serviceWorker.register('sw.js').then(function (serviceWorkerRegistration) {
+    console.log('Service Worker Registration Success.');
+    // Push Manager
+    if ('PushManager' in window) {
+      navigator.serviceWorker.ready.then(function () {
+        var convertedVapidKey = urlBase64UrlToUint8Array(_push_key2.default.pushVapidKeys.publicKey);
+        serviceWorkerRegistration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedVapidKey
+        }).then(function (pushSubscription) {
+          push.registerPushSubscription(pushSubscription);
+        }, function (error) {
+          console.log(error);
+        });
+      });
+    }
+  }).catch(function (error) {
+    console.error('Service Worker Registration Fail. ', error);
+  });
+}
+
+/**
+ * check service worker registered or not
+ */
+function isServiceWorkerRegistered() {
+  return new Promise(function (resolve, reject) {
+    navigator.serviceWorker.getRegistration().then(function (registration) {
+      console.log('isServiceWorkerRegistered' + registration);
+      if (registration === undefined) {
+        resolve(false);
+      } else {
+        resolve(true);
+      }
+    });
+  });
+}
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').then(function (serviceWorkerRegistration) {
-      console.log('Service Worker Registration Success.');
-      // Push Manager
-      if ('PushManager' in window) {
-        navigator.serviceWorker.ready.then(function () {
-          var convertedVapidKey = urlBase64UrlToUint8Array(_push_key2.default.pushVapidKeys.publicKey);
-          serviceWorkerRegistration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: convertedVapidKey
-          }).then(function (pushSubscription) {
-            push.registerSubscription(pushSubscription);
-          }, function (error) {
-            console.log(error);
-          });
+    Promise.resolve().then(push.getPushPermissionStatus).then(function (permission) {
+      if (permission === 'granted') {
+        Promise.resolve().then(isServiceWorkerRegistered).then(function (registerd) {
+          console.log(' registerd  = ' + registerd);
+          if (registerd == false) {
+            registerServiceWorker();
+          }
         });
+      } else {
+        // TODO(jimmy): need to notify users that should enable push permission for absolute
+        console.log('permission is denied');
       }
-    }).catch(function (error) {
-      console.error('Service Worker Registration Fail. ', error);
     });
   });
 }
@@ -440,7 +474,7 @@ if ('serviceWorker' in navigator) {
 // style-loader: Adds some css to the DOM by adding a <style> tag
 
 // load the styles
-var content = __webpack_require__(12);
+var content = __webpack_require__(11);
 if(typeof content === 'string') content = [[module.i, content, '']];
 // Prepare cssTransformation
 var transform;
@@ -448,7 +482,7 @@ var transform;
 var options = {}
 options.transform = transform
 // add the styles to the DOM
-var update = __webpack_require__(13)(content, options);
+var update = __webpack_require__(12)(content, options);
 if(content.locals) module.exports = content.locals;
 // Hot Module Replacement
 if(false) {
@@ -526,92 +560,6 @@ console.log(coffeeTallSizeIceAddShot.name);
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-// Copyright (c) 2017 The Absolute Authors.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * Authorization class
- */
-var Authorization = function () {
-  /**
-   * @constructor
-   */
-  function Authorization() {
-    _classCallCheck(this, Authorization);
-
-    /* User ID for user */
-    this._userId = 0;
-  }
-
-  /**
-   * get browser fingerprint
-   */
-
-
-  _createClass(Authorization, null, [{
-    key: 'getBrowserFingerprint',
-    value: function getBrowserFingerprint() {
-      var canvas = document.createElement('canvas');
-      var ctx = canvas.getContext('2d');
-      var txt = 'i9asdm..$#po((^@KbXrww!~cz';
-      ctx.textBaseline = "top";
-      ctx.font = "16px 'Arial'";
-      ctx.textBaseline = "alphabetic";
-      ctx.rotate(.05);
-      ctx.fillStyle = "#f60";
-      ctx.fillRect(125, 1, 62, 20);
-      ctx.fillStyle = "#069";
-      ctx.fillText(txt, 2, 15);
-      ctx.fillStyle = "rgba(102, 200, 0, 0.7)";
-      ctx.fillText(txt, 4, 17);
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = "blue";
-      ctx.fillRect(-20, 10, 234, 5);
-      var stringValute = canvas.toDataURL();
-      var hash = 0;
-      console.log('stringValute = ' + stringValute);
-      if (stringValute.length == 0) {
-        return;
-      }
-      for (i = 0; i < stringValute.length; i++) {
-        char = stringValute.charCodeAt(i);
-        hash = (hash << 5) - hash + char;
-        hash = hash & hash;
-      }
-      console.log('browser fingerprint = ' + hash);
-      this._userId = hash;
-      return hash;
-    }
-  }]);
-
-  return Authorization;
-}();
-
-exports.default = Authorization;
-
-/***/ }),
-/* 8 */
-/***/ (function(module, exports) {
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
 exports.default = {
   'pushVapidKeys': {
     'publicKey': 'BIIRaJLExnx2i0LLD8ROMfWazpjE7dQJo6UQo9zqbqu-rNSJFK2tyKM1FykWvrJSi9062j3xurAovn3jmli7Fws'
@@ -619,8 +567,8 @@ exports.default = {
 };
 
 /***/ }),
-/* 9 */,
-/* 10 */
+/* 8 */,
+/* 9 */
 /***/ (function(module, exports) {
 
 /*
@@ -699,7 +647,7 @@ function toComment(sourceMap) {
 }
 
 /***/ }),
-/* 11 */
+/* 10 */
 /***/ (function(module, exports) {
 
 
@@ -792,10 +740,10 @@ module.exports = function (css) {
 };
 
 /***/ }),
-/* 12 */
+/* 11 */
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(10)(undefined);
+exports = module.exports = __webpack_require__(9)(undefined);
 // imports
 
 
@@ -806,7 +754,7 @@ exports.push([module.i, "/**\r\n * Copyright (c) 2017 The Absolute Authors.\r\n 
 
 
 /***/ }),
-/* 13 */
+/* 12 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /*
@@ -852,7 +800,7 @@ var singleton = null;
 var	singletonCounter = 0;
 var	stylesInsertedAtTop = [];
 
-var	fixUrls = __webpack_require__(11);
+var	fixUrls = __webpack_require__(10);
 
 module.exports = function(list, options) {
 	if (typeof DEBUG !== "undefined" && DEBUG) {
